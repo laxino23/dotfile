@@ -58,3 +58,4 @@ desktop.ini
 # 已经存在的 node_modules 也别再提交了
 node_modules/
 
+package.json
