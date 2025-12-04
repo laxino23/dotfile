@@ -20,8 +20,17 @@ if not ok_2 then
   indent_config = {}
 end
 
+local ok_3, dashboard_config = pcall(require, "plugins.snacks.dashboard")
+if not ok_3 then
+  vim.notify(
+    "Snacks Dashboard 配置加载失败: " .. tostring(dashboard_config),
+    vim.log.levels.WARN
+  )
+  dashboard_config = {}
+end
+
 local opts = {
-  -- Picker and Indent
+  -- Picker, Indent and Dashboard
   picker = picker_config,
   indent = {
     indent = indent_config.indent,
@@ -29,6 +38,7 @@ local opts = {
     scope = indent_config.scope,
     chunk = indent_config.chunk,
   },
+  dashboard = dashboard_config,
 
   -- Other Configs
   explorer = { enabled = true, replace_netrw = false },
@@ -48,7 +58,6 @@ local opts = {
   lazygit = { enabled = false },
   terminal = { enabled = true },
   gitbrowse = { enabled = true },
-  -- dashboard = { enabled = true },
 }
 
 vim.api.nvim_create_autocmd("UIEnter", {
