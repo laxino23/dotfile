@@ -1,0 +1,7 @@
+{
+  "keymap": {
+    "normal": {
+      "ctrl+k": "clear"
+    }
+  }
+}
