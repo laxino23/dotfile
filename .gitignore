@@ -55,7 +55,11 @@ desktop.ini
 *.bak
 *.log
 
-# 已经存在的 node_modules 也别再提交了
+# 已经存在的 node_modules
 node_modules/
 
 package.json
+
+# nv12
+nv12/
+
