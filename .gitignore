@@ -1,2 +1,60 @@
-github-copilot/apps.json
-github-copilot/
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+pnpm-debug.log
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.npm
+.node_repl_history
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# macOS / Linux / Windows
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.#*
+.tmp
+.temp
+
+# Editors
+.idea/
+.vscode/
+*.sublime-*
+*.code-workspace
+
+# 其他临时文件
+*.tmp
+*.temp
+*.bak
+*.log
+
+# 已经存在的 node_modules 也别再提交了
+node_modules/
+
