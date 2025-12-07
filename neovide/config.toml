@@ -1,0 +1,33 @@
+# ── 通用设置 ──
+vsync = true
+idle = true
+# refresh_rate 在较新版本可能是有效的，但如果无效请尝试在启动参数中设置
+# refresh_rate = 120
+
+frame = "none"                # 无边框模式（最美，但意味着你需要用快捷键移动窗口）
+maximized = true
+transparency = 0.80           # 这是 Neovide 窗口的基础透明度
+hide_mouse_when_typing = true
+srgb = false
+fork = false
+tabs = true
+
+# ── 字体设置 (LXGW WenKai is beautiful!) ──
+[font]
+size = 13.0
+normal = ["CaskaydiaCove Nerd Font", "LXGW WenKai Mono", "Symbols Nerd Font"]
+
+# ── 渲染微调 ──
+[box-drawing]
+mode = "font-glyph"
+
+# ── 动画设置 ──
+# 注意：以下这些通常也支持在 init.lua 中动态调整，但写在这里作为默认值是可以的
+cursor_animation_length = 0.06
+cursor_trail_length = 0.25
+cursor_vfx_mode = "ripple"     # 粒子特效
+scroll_animation_length = 0.22
+
+# ── macOS 专属 ──
+[macos]
+option_as_alt = "both"

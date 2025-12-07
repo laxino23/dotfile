@@ -1,0 +1,74 @@
+# --- System / OS (系统文件) ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# --- Node.js & NPM (Fixes your previous error) ---
+# Ignore the actual heavy dependencies, just keep package.json
+# 忽略依赖包文件夹，只保留 package.json
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Neovim (nvim & nv12) ---
+# Logs (like the neovide one in your tree)
+# 忽略日志文件
+*.log
+neovide_rCURRENT.log
+
+# Swap and backup files (if they are generated in the folder)
+# 交换文件和备份文件
+*.swp
+*.swo
+*~
+
+# Session files (optional, keeps your folder clean)
+# 会话文件
+Session.vim
+shada/
+
+# Lazy.nvim & Pack manager locks
+# (Usually you want to KEEP these to lock plugin versions. Uncomment to ignore)
+# (通常保留这些以锁定插件版本。如果你不想同步版本，取消注释下面两行)
+# lazy-lock.json
+# nvim-pack-lock.json
+
+# --- Fish Shell ---
+# Automatically generated variables (contains local history/state)
+# 自动生成的变量文件（包含本地状态，不应同步）
+fish/fish_variables
+# Command history
+# 历史记录
+fish/fish_history
+# Oh My Fish bundles (dependencies, re-installable)
+# OMF 下载的插件包（可以通过 omf install 重新安装）
+omf/bundle/
+omf/cache/
+
+# --- Wireshark ---
+# Recent file lists (local session data)
+# 本地最近打开的文件记录
+wireshark/recent
+wireshark/recent_common
+
+# --- Atuin ---
+# Authentication/Session receipt
+# 认证或会话凭证
+atuin/atuin-receipt.json
+
+# --- Others / Temp ---
+# Updates notifier cache
+simple-update-notifier/
+# Devbox internal state (if distinct from your config folder)
+.devbox/
+
+# --- Sensitive Data (Security) ---
+# Ensure no private keys are committed
+# 确保没有私钥被提交
+*.pem
+*.key
+id_rsa

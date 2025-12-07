@@ -28,5 +28,10 @@ use = "ciarandg/cd-git-root"
 rev = "a0e0f4b"
 hash = "b84a85f3b513bd9c0a0ab93cc7c8e4c3"
 
+[[plugin.deps]]
+use = "boydaihungst/restore"
+rev = "6395e52"
+hash = "f107436db5d2cccccc11ab54bc97b761"
+
 [flavor]
 deps = []

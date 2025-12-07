@@ -264,6 +264,36 @@ keymap = [
   { on = "<F1>", run = "help", desc = "Open help" },
 ]
 
+prepend_keymap = [
+  { on = "u", run = "plugin restore", desc = "Restore last deleted files/folders" },
+  # or use "d + u" like me
+  { on = [
+    "d",
+    "u",
+  ], run = "plugin restore", desc = "Restore last deleted files/folders" },
+
+
+  # This will throw error when there is existed file/folder
+  { on = [
+    "d",
+    "U",
+  ], run = "plugin restore -- --interactive", desc = "Restore deleted files/folders (Interactive)" },
+  # Or auto overwrite existed file/folder
+  { on = [
+    "d",
+    "U",
+  ], run = "plugin restore -- --interactive --interactive-overwrite", desc = "Restore deleted files/folders (Interactive overwrite)" },
+
+  { on = "<Enter>", run = "plugin smart-enter", desc = "Enter child or open file" }, # ADD THIS LINE
+  { on = "l", run = "plugin smart-enter", desc = "Enter child or open file" }, # Smart Enter / 智能进入
+  { on = "Z", run = "plugin zoxide", desc = "Jump to a directory" }, # Zoxide Jump / Zoxide 跳转
+  { on = [
+    "g",
+    "r",
+  ], run = "plugin cd-git-root", desc = "Go to git repo root" },
+]
+
+
 [tasks]
 
 keymap = [
@@ -491,29 +521,4 @@ keymap = [
   # Help
   { on = "~", run = "help", desc = "Open help" },
   { on = "<F1>", run = "help", desc = "Open help" },
-]
-
-[help]
-
-keymap = [
-  { on = "<Esc>", run = "escape", desc = "Clear the filter, or hide the help" },
-  { on = "<C-[>", run = "escape", desc = "Clear the filter, or hide the help" },
-  { on = "<C-c>", run = "close", desc = "Close the help" },
-
-  # Navigation
-  { on = "k", run = "arrow prev", desc = "Previous line" },
-  { on = "j", run = "arrow next", desc = "Next line" },
-
-  { on = "<Up>", run = "arrow prev", desc = "Previous line" },
-  { on = "<Down>", run = "arrow next", desc = "Next line" },
-
-  # Filtering
-  { on = "f", run = "filter", desc = "Filter help items" },
-]
-
-[manager]
-prepend_keymap = [
-  { on = "l", run = "plugin smart-enter", desc = "Enter child or open file" }, # Smart Enter / 智能进入
-  { on = "Z", run = "plugin zoxide", desc = "Jump to a directory" },           # Zoxide Jump / Zoxide 跳转
-{on   = ["g", "r"], run  = "plugin cd-git-root", desc = "Go to git repo root"} # Changes directory to the root of the git repository you are currently in
 ]
