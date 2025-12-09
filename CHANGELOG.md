@@ -3,6 +3,7 @@
 ### 🚀 Features
 
 - *(change the nvim)* Nvim to new architecture
+- *(lsp)* Lsp enabled!!!
 
 ### 🐛 Bug Fixes
 

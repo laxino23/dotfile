@@ -1,177 +1,178 @@
-local funcs = require("core.fns")
 local data = require("lvim-control-center.persistence.data")
-local utils = require("plugins.core.config.editor.control_center.utils")
 local icons = require("config.ui.icons")
+local setup_diagnostics = require("languages.utils.setup_diagnostics")
+local fidget = require("fidget")
+local code_lens = require("languages.utils.code_lens")
 
 return {
     name = "lsp",
     label = "LSP",
-    icon = icons.common.vim2,
+    icon = icons.common.light_bulb,
     settings = {
         {
-            name = "relativenumber",
-            label = "Show relative line numbers",
-            type = "bool",
-            default = false,
-            get = function()
-                return vim.opt.relativenumber.get()
-            end,
-            set = function(val, on_init)
-                if on_init then
-                    vim.opt.relativenumber = val
-                else
-                    for _, win in ipairs(vim.api.nvim_list_wins()) do
-                        local buf = vim.api.nvim_win_get_buf(win)
-                        if not utils.is_excluded(buf, {}, { "neo-tree", "Fyler" }) then
-                            vim.wo[win].relativenumber = val
-                        end
-                    end
-                    data.save("relativenumber", val)
-                end
-            end,
-        },
-        {
-            name = "cursorline",
-            label = "Show cursor line",
+            name = "autoformat",
+            label = "Auto format",
             type = "bool",
             default = true,
             get = function()
-                return vim.opt.cursorline.get()
-            end,
-            set = function(val, on_init)
-                if on_init then
-                    vim.opt.cursorline = val
-                else
-                    for _, win in ipairs(vim.api.nvim_list_wins()) do
-                        local buf = vim.api.nvim_win_get_buf(win)
-                        if not utils.is_excluded(buf, {}, { "neo-tree" }) then
-                            vim.wo[win].cursorline = val
-                        end
-                    end
-                    data.save("cursorline", val)
-                end
-            end,
-        },
-        {
-            name = "cursorcolumn",
-            label = "Show cursor column",
-            type = "bool",
-            default = true,
-            get = function()
-                return vim.opt.cursorcolumn.get()
-            end,
-            set = function(val, on_init)
-                if on_init then
-                    vim.opt.cursorcolumn = val
-                else
-                    for _, win in ipairs(vim.api.nvim_list_wins()) do
-                        local buf = vim.api.nvim_win_get_buf(win)
-                        if not utils.is_excluded(buf, {}, { "neo-tree", "markdown", "Fyler", "time-machine-list" }) then
-                            vim.wo[win].cursorcolumn = val
-                        end
-                    end
-                    data.save("cursorcolumn", val)
-                end
-            end,
-        },
-        {
-            name = "wrap",
-            label = "Wrap lines",
-            type = "bool",
-            default = true,
-            get = function()
-                return vim.opt.wrap.get()
-            end,
-            set = function(val, on_init)
-                if on_init then
-                    vim.opt.wrap = val
-                else
-                    for _, win in ipairs(vim.api.nvim_list_wins()) do
-                        local buf = vim.api.nvim_win_get_buf(win)
-                        if not utils.is_excluded(buf, {}, { "markdown" }) then
-                            vim.wo[win].wrap = val
-                        end
-                    end
-                    data.save("wrap", val)
-                end
-            end,
-        },
-        {
-            name = "colorcolumn",
-            label = "Color column",
-            type = "string",
-            default = "80",
-            get = function()
-                return vim.opt.colorcolumn.get()
-            end,
-            set = function(val, on_init)
-                if on_init then
-                    vim.opt.colorcolumn = val
-                else
-                    for _, win in ipairs(vim.api.nvim_list_wins()) do
-                        local buf = vim.api.nvim_win_get_buf(win)
-                        if not utils.is_excluded(buf, {}, { "neo-tree", "Fyler" }) then
-                            vim.wo[win].colorcolumn = val
-                        end
-                    end
-                    data.save("colorcolumn", val)
-                end
-            end,
-        },
-        {
-            name = "timeoutlen",
-            label = "Timeout Length (ms)",
-            type = "int",
-            default = 500,
-            get = function()
-                return vim.o.timeoutlen
-            end,
-            set = function(val, on_init)
-                vim.o.timeoutlen = val
-                if not on_init then
-                    data.save("timeoutlen", val)
-                end
-            end,
-        },
-        {
-            name = "keyshelper",
-            label = "Keys helper (need restart)",
-            type = "bool",
-            default = true,
-            get = function()
-                if _G.KEYSHELPER ~= nil then
-                    return _G.KEYSHELPER
+                if _G.SETTINGS and _G.SETTINGS["autoformat"] ~= nil then
+                    return _G.SETTINGS["autoformat"]
                 else
                     return true
                 end
             end,
             set = function(val, on_init)
-                _G.KEYSHELPER = val
-                funcs.write_file(_G.global.custom_path .. "/.configs/lvim/.keyshelper", _G.LVIM_KEYSHELPER)
+                _G.SETTINGS["autoformat"] = val
                 if not on_init then
-                    data.save("keyshelper", val)
+                    data.save("autoformat", val)
                 end
             end,
         },
         {
-            name = "keyshelperdelay",
-            label = "Keys helper delay",
+            name = "inlayhint",
+            label = "Inlay hint",
+            type = "bool",
+            default = true,
+            get = function()
+                if _G.SETTINGS and _G.SETTINGS["inlayhint"] ~= nil then
+                    return _G.SETTINGS["inlayhint"]
+                else
+                    return true
+                end
+            end,
+            set = function(val, on_init)
+                _G.SETTINGS["inlayhint"] = val
+                if not on_init then
+                    local buffers = vim.api.nvim_list_bufs()
+                    for _, bufnr in ipairs(buffers) do
+                        if vim.lsp.inlay_hint ~= nil then
+                            vim.lsp.inlay_hint.enable(val, { bufnr })
+                        end
+                    end
+                    data.save("inlayhint", val)
+                end
+            end,
+        },
+        {
+            name = "virtualdiagnostic",
+            label = "Virtual diagnostic",
             type = "select",
-            options = { 0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000 },
-            default = 200,
+            options = { "text-and-lines", "text", "lines", "none" },
+            default = "none",
             get = function()
-                if _G.SETTINGS and _G.SETTINGS["keyshelperdelay"] ~= nil then
-                    return _G.SETTINGS["keyshelperdelay"]
+                if _G.SETTINGS and _G.SETTINGS["virtualdiagnostic"] ~= nil then
+                    return _G.SETTINGS["virtualdiagnostic"]
+                else
+                    return "none"
+                end
+            end,
+            set = function(val, on_init)
+                _G.SETTINGS["virtualdiagnostic"] = val
+                if not on_init then
+                    local config = vim.diagnostic.config
+                    local virtualdiagnostic
+                    if val == "text-and-lines" then
+                        virtualdiagnostic = { text = true, lines = true }
+                    elseif val == "text" then
+                        virtualdiagnostic = { text = true, lines = false }
+                    elseif val == "lines" then
+                        virtualdiagnostic = { text = false, lines = true }
+                    else
+                        virtualdiagnostic = { text = false, lines = false }
+                    end
+                    local is_empty = not virtualdiagnostic or next(virtualdiagnostic) == nil
+                    config({
+                        virtual_text = (not is_empty and virtualdiagnostic.text) and { prefix = icons.common.dot }
+                            or false,
+                        virtual_lines = not is_empty and virtualdiagnostic.lines or false,
+                    })
+                    data.save("virtualdiagnostic", val)
+                end
+            end,
+        },
+        {
+            name = "lspprogress",
+            label = "LSP progress",
+            type = "select",
+            options = { "fidget", "notify", "none" },
+            default = "fidget",
+            get = function()
+                if _G.SETTINGS and _G.SETTINGS["lspprogress"] ~= nil then
+                    return _G.SETTINGS["lspprogress"]
+                else
+                    return "fidget"
+                end
+            end,
+            set = function(val, on_init)
+                _G.SETTINGS["lspprogress"] = val
+                if not on_init then
+                    if val == "notify" then
+                        fidget.progress.suppress(true)
+                        fidget.notification.suppress(true)
+                        setup_diagnostics.enable_lsp_progress()
+                    elseif val == "fidget" then
+                        fidget.progress.suppress(false)
+                        fidget.notification.suppress(false)
+                        setup_diagnostics.disable_lsp_progress()
+                    else
+                        fidget.progress.suppress(true)
+                        fidget.notification.suppress(true)
+                        setup_diagnostics.disable_lsp_progress()
+                    end
+                    data.save("lspprogress", val)
+                end
+            end,
+        },
+        {
+            name = "codelens",
+            label = "Code lens",
+            type = "bool",
+            default = true,
+            get = function()
+                if _G.SETTINGS and _G.SETTINGS["codelens"] ~= nil then
+                    return _G.SETTINGS["codelens"]
                 else
                     return true
                 end
             end,
             set = function(val, on_init)
-                _G.SETTINGS["keyshelperdelay"] = val
+                _G.SETTINGS["codelens"] = val
                 if not on_init then
-                    vim.cmd("Lazy reload which-key.nvim")
-                    data.save("keyshelperdelay", val)
+                    code_lens.set_codelens_enabled(val)
+                    data.save("codelens", val)
                 end
+            end,
+        },
+        {
+            name = "lspinfo",
+            label = "Info LSP",
+            type = "action",
+            run = function()
+                vim.cmd("LvimLspInfo")
+            end,
+        },
+        {
+            name = "lsprestart",
+            label = "Restart LSP",
+            type = "action",
+            run = function()
+                vim.cmd("LvimLspRestart")
+            end,
+        },
+        {
+            name = "lsptoggleservers",
+            label = "Toggle LSP servers for workspace",
+            type = "action",
+            run = function()
+                vim.cmd("LvimLspToggleServers")
+            end,
+        },
+        {
+            name = "lsptoggleserversforbuffer",
+            label = "Toggle LSP servers for buffer",
+            type = "action",
+            run = function(origin_bufnr)
+                vim.cmd("LvimLspToggleServersForBuffer " .. origin_bufnr)
             end,
         },
     },

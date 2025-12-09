@@ -1,15 +1,14 @@
 local options = require "config.options"
 local keymaps = require "config.keymaps"
 local keymaps_ft = require "config.keymaps_ft"
+local core_fts = require "languages.lsp.core.file_types"
+local extra_fts = require "languages.lsp.extra.file_types"
+local fns = require "core.fns"
 
 -- setup auto group for unifying auto cmd
 local group = vim.api.nvim_create_augroup("MyIDE", {
 	clear = true,
 })
-
--- require util fns and fts
-local fns = require "core.fns"
-local fts = require "languages.fts"
 
 local configs = {}
 
@@ -153,7 +152,7 @@ configs["custom_config"] = function()
     )
 end
 
-configs["events"] = function()
+configs["base_events"] = function()
     vim.api.nvim_create_autocmd({ "FileType", "BufEnter" }, {
         pattern = {
             "markdown",
@@ -252,7 +251,7 @@ configs["base_languages"] = function()
     vim.keymap.del("n", "gri")
     vim.keymap.del("n", "gO")
     vim.keymap.del("i", "<C-s>")
-    _G.file_types = fts
+    _G.file_types = fns.merge(core_fts, extra_fts)
 end
 
 configs["base_commands"] = function()

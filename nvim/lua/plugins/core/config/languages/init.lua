@@ -3,20 +3,25 @@ local icons = require("config.ui.icons")
 return {
     mason = {
         opts = function()
+            local mason_auto = require("plugins.core.config.languages.mason_registry")
+            
             vim.schedule(function()
                 require("languages").init()
                 require("languages.utils.setup_diagnostics").init_diagnostics()
                 require("languages.lsp_commands")
                 require("languages.utils.code_lens").setup()
+                
+                -- Setup auto-installation
+                mason_auto.setup()
             end)
+            
             return {
                 ui = {
                     icons = icons.mason,
                 },
             }
         end,
-    },
-
+   },
     neotest = {
         cmd = {
             "NeotestRun",
@@ -110,6 +115,7 @@ return {
             }
         end,
     },
+
     nvim_rip_substitute = {
         cmd = { "RipSubstitute" },
         keys = {
@@ -147,6 +153,7 @@ return {
             },
         },
     },
+
     glance_nvim = {
         keys = {
             {
@@ -216,6 +223,7 @@ return {
             },
         },
     },
+
     trouble_nvim = {
         cmd = { "Trouble" },
         keys = {
@@ -231,6 +239,7 @@ return {
             },
         },
     },
+
     flutter_tools_nvim = {
         opts = function()
             local setup_diagnostics = require("languages.utils.setup_diagnostics")
@@ -514,6 +523,7 @@ return {
             }
         end,
     },
+
     nvim_px_to_rem = {
         cmd = { "PxToRemCursor", "PxToRemLine" },
         keys = {

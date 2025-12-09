@@ -1,5 +1,5 @@
 -- =============================================================================
--- Description: Provides user commands, interactive management menus, and 
+-- Description: Provides extra commands, interactive management menus, and 
 --              visual information displays for Neovim's LSP clients.
 -- =============================================================================
 
@@ -478,6 +478,7 @@ local function setup_lsp_error_filter()
         original_notify(msg, level, opts)
     end
 end
+
 setup_lsp_error_filter()
 
 -- =============================================================================

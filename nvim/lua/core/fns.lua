@@ -28,7 +28,8 @@ M.merge = function(tbl1, tbl2)
 end
 
 ---@description Converts a dictionary-like table into a sorted array of {key, value} pairs.
----@description 将字典表转换为有序的数组表（注意：这会改变原表结构）。
+---@description 将字典表转换为有序的数组表
+---@description used for return the lazy_pack
 ---@param tbl table
 ---@return table
 M.sort = function(tbl)
@@ -319,8 +320,8 @@ end
 ---@description Deletes the custom packages cache file.
 ---@description 删除本地包缓存文件。
 M.delete_packages_file = function()
-    local lvim_packages_file = _G.global.cache_path .. "/.lvim_packages"
-    os.remove(lvim_packages_file)
+    local packages_file = _G.global.cache_path .. "/.packages"
+    os.remove(packages_file)
 end
 
 -- ============================================================
@@ -362,11 +363,6 @@ M.file_size = function(size, options)
     -- [Implementation details omitted for brevity as they are standard logic]
     -- ...
     -- Note: The logic handles base-2 vs base-10 and various output formats
-    
-    -- 简化版实现注释 (Simplified logic comment):
-    -- 1. Calculate exponent (logarithm)
-    -- 2. Divide size by base^exponent
-    -- 3. Return string with suffix
     
     -- [Original code logic preserved below]
     local function isNan(num) return num ~= num end
@@ -651,7 +647,7 @@ end
 -- ============================================================
 
 ---@description Gets the hex color codes for a highlight group.
----@description 获取指定高亮组的背景色和前景色（Hex 格式）。
+---@description 获取指定高亮组的背景色和前景色（Hex）。
 M.get_highlight = function(hl_group)
     local hl_details = vim.api.nvim_get_hl(0, { name = hl_group })
     local bg_color = nil
