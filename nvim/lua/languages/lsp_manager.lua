@@ -1,0 +1,445 @@
+-- =============================================================================
+-- Description: Handles the core logic for starting, configuring, and stopping
+--              LSP clients. Implements logic for root directory detection
+--              and process reuse to save memory.
+-- =============================================================================
+
+local uv = vim.loop
+
+-- Global state trackers
+_G.lsp_clients_by_root = _G.lsp_clients_by_root or {}
+_G.lsp_disabled_servers = _G.lsp_disabled_servers or {}
+_G.lsp_disabled_for_buffer = _G.lsp_disabled_for_buffer or {}
+_G.efm_configs = _G.efm_configs or {}
+
+local M = {}
+
+-- Recursively searches parent directories for specific markers (e.g., .git, package.json).
+-- Returns the directory path if found, otherwise nil.
+local function root_pattern(...)
+    local markers = { ... }
+    return function(startpath)
+        if not startpath or #startpath == 0 then return nil end
+        local path = uv.fs_realpath(startpath) or startpath
+        local stat = uv.fs_stat(path)
+        if stat and stat.type == "file" then
+            path = vim.fn.fnamemodify(path, ":h")
+        end
+        while path and #path > 0 do
+            for _, marker in ipairs(markers) do
+                if uv.fs_stat(path .. "/" .. marker) then return path end
+            end
+            local parent = vim.fn.fnamemodify(path, ":h")
+            if parent == path then break end
+            path = parent
+        end
+        return nil
+    end
+end
+
+-- Validates if a buffer is a real file (not a terminal or help buffer).
+local function is_real_file_buffer(bufnr)
+    if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then return false end
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    return name and name ~= ""
+end
+
+-- Checks if a specific client ID is already attached to the given buffer.
+local function is_client_attached_to_buffer(client_id, bufnr)
+    if not client_id then return false end
+    if not bufnr or bufnr == 0 then bufnr = vim.api.nvim_get_current_buf() end
+    if not vim.api.nvim_buf_is_valid(bufnr) then return false end
+    
+    local ok, clients = pcall(vim.lsp.get_clients, { bufnr = bufnr })
+    if not ok or type(clients) ~= "table" then return false end
+    
+    for _, c in ipairs(clients) do
+        if c and c.id == client_id then return true end
+    end
+    return false
+end
+
+-- =============================================================================
+-- Server Status Checks
+-- =============================================================================
+
+M.is_server_disabled_globally = function(server_name)
+    return _G.lsp_disabled_servers[server_name] == true
+end
+
+M.is_server_disabled_for_buffer = function(server_name, bufnr)
+    return _G.lsp_disabled_for_buffer[bufnr] and _G.lsp_disabled_for_buffer[bufnr][server_name] == true
+end
+
+-- Verifies if a server is configured to handle the given filetype.
+M.is_lsp_compatible_with_ft = function(server_name, ft)
+    if not ft or ft == "" then return false end
+    -- EFM compatibility check
+    if server_name == "efm" then
+        if _G.efm_configs and _G.efm_configs[ft] then return true end
+        if _G.global and _G.global.efm and _G.global.efm.filetypes then
+            return vim.tbl_contains(_G.global.efm.filetypes, ft)
+        end
+    end
+    -- Standard server check
+    if not _G.file_types or not _G.file_types[server_name] then return false end
+    return vim.tbl_contains(_G.file_types[server_name], ft)
+end
+
+-- Returns a list of all servers compatible with a specific filetype.
+M.get_compatible_lsp_for_ft = function(ft)
+    if not ft or ft == "" then return {} end
+    local compatible_servers = {}
+    for server_name, filetypes in pairs(_G.file_types or {}) do
+        if vim.tbl_contains(filetypes, ft) then
+            table.insert(compatible_servers, server_name)
+        end
+    end
+    -- Add EFM if applicable
+    if (_G.global and _G.global.efm and _G.global.efm.filetypes and vim.tbl_contains(_G.global.efm.filetypes, ft))
+       or (_G.efm_configs and _G.efm_configs[ft]) then
+        table.insert(compatible_servers, "efm")
+    end
+    return compatible_servers
+end
+
+-- =============================================================================
+-- Core Lifecycle Management
+-- =============================================================================
+
+-- Main function to attach an LSP. It either reuses an existing client 
+-- for the project root or starts a new process.
+M.ensure_lsp_for_buffer = function(server_name, bufnr)
+    if not is_real_file_buffer(bufnr) then return nil end
+    if M.is_server_disabled_globally(server_name) or M.is_server_disabled_for_buffer(server_name, bufnr) then return nil end
+    
+    local ft = vim.bo[bufnr].filetype
+    if not M.is_lsp_compatible_with_ft(server_name, ft) then return nil end
+
+    -- Load Configuration: Try user config first, fall back to base config
+    local ok, mod
+    if server_name == "efm" then
+        ok, mod = pcall(require, "languages.user.lsp.efm")
+        if not ok or type(mod) ~= "table" or not mod.config then
+            ok, mod = pcall(require, "languages.base.lsp.efm")
+        end
+    else
+        ok, mod = pcall(require, "languages.user.lsp." .. server_name)
+        if not ok or type(mod) ~= "table" or not mod.config then
+            ok, mod = pcall(require, "languages.base.lsp." .. server_name)
+        end
+    end
+    if not ok or type(mod) ~= "table" or not mod.config then return nil end
+
+    -- Determine Project Root
+    local fname = vim.api.nvim_buf_get_name(bufnr)
+    local patterns = mod.root_patterns or { ".git" }
+    local finder = root_pattern(unpack(patterns))
+    local root_dir = finder(fname) or vim.loop.cwd()
+
+    -- REUSE STRATEGY: Check if we already have a client for this root
+    _G.lsp_clients_by_root[server_name] = _G.lsp_clients_by_root[server_name] or {}
+    local client_id = _G.lsp_clients_by_root[server_name][root_dir]
+
+    if client_id then
+        local client = vim.lsp.get_client_by_id(client_id)
+        if client then
+            if not is_client_attached_to_buffer(client_id, bufnr) then
+                vim.lsp.buf_attach_client(bufnr, client_id)
+                if type(mod.config) == "table" and type(mod.config.on_attach) == "function" then
+                    pcall(mod.config.on_attach, client, bufnr)
+                end
+            end
+            return client_id
+        end
+    end
+
+    -- START STRATEGY: No existing client found, start a new one
+    local config = (type(mod.config) == "function") and mod.config() or vim.deepcopy(mod.config)
+    if not config then return nil end
+    config.root_dir = root_dir
+
+    local new_client_id = vim.lsp.start({
+        name = config.name or server_name,
+        cmd = config.cmd,
+        root_dir = config.root_dir,
+        settings = config.settings,
+        init_options = config.init_options,
+        capabilities = config.capabilities,
+        on_attach = function(client, attached_bufnr)
+            if attached_bufnr == bufnr and config.on_attach then
+                pcall(config.on_attach, client, attached_bufnr)
+            end
+        end,
+    }, { bufnr = bufnr })
+
+    -- Cache the new client ID for future reuse
+    if new_client_id then
+        _G.lsp_clients_by_root[server_name] = _G.lsp_clients_by_root[server_name] or {}
+        local key = root_dir or "default"
+        _G.lsp_clients_by_root[server_name][key] = new_client_id
+        return new_client_id
+    end
+    return nil
+end
+
+-- Safely detaches a client from a buffer, clearing references first.
+M.safe_detach_client = function(bufnr, client_id)
+    if not bufnr or bufnr <= 0 or not vim.api.nvim_buf_is_valid(bufnr) then return false end
+    local client = vim.lsp.get_client_by_id(client_id)
+    if not client then return false end
+
+    if is_client_attached_to_buffer(client_id, bufnr) then
+        pcall(function() vim.lsp.buf.clear_references() end)
+        pcall(vim.lsp.buf_detach_client, bufnr, client_id)
+        return true
+    end
+    return false
+end
+
+-- Disables a server globally and kills all its running instances.
+M.disable_lsp_server_globally = function(server_name)
+    _G.lsp_disabled_servers[server_name] = true
+    for _, client in ipairs(vim.lsp.get_clients()) do
+        if client.name == server_name then
+            -- Detach from all buffers first
+            local attached_buffers = {}
+            for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+                if vim.api.nvim_buf_is_valid(bufnr) then
+                    local ok, clients_for_buf = pcall(vim.lsp.get_clients, { bufnr = bufnr })
+                    if ok then
+                        for _, c in ipairs(clients_for_buf) do
+                            if c.id == client.id then
+                                attached_buffers[bufnr] = true
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+            for bufnr, _ in pairs(attached_buffers) do
+                M.safe_detach_client(bufnr, client.id)
+            end
+            -- Stop the client
+            pcall(function() client:stop() end)
+        end
+    end
+    return true
+end
+
+-- Disables a server specifically for one buffer.
+M.disable_lsp_server_for_buffer = function(server_name, bufnr)
+    if not _G.lsp_disabled_for_buffer[bufnr] then
+        _G.lsp_disabled_for_buffer[bufnr] = {}
+    end
+    _G.lsp_disabled_for_buffer[bufnr][server_name] = true
+    for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+        if client.name == server_name then
+            M.safe_detach_client(bufnr, client.id)
+            break
+        end
+    end
+    return true
+end
+
+M.enable_lsp_server_globally = function(server_name)
+    _G.lsp_disabled_servers[server_name] = nil
+    return true
+end
+
+-- Enables a server for a buffer and attempts to attach it.
+M.enable_lsp_server_for_buffer = function(server_name, bufnr)
+    if _G.lsp_disabled_for_buffer[bufnr] then
+        _G.lsp_disabled_for_buffer[bufnr][server_name] = nil
+    end
+    if M.is_server_disabled_globally(server_name) then return false end
+    
+    local ft = vim.bo[bufnr].filetype
+    if ft and ft ~= "" and M.is_lsp_compatible_with_ft(server_name, ft) and is_real_file_buffer(bufnr) then
+        local client_id
+        -- Try to find existing running client first
+        for _, client in ipairs(vim.lsp.get_clients()) do
+            if client.name == server_name then
+                client_id = client.id
+                break
+            end
+        end
+        if client_id then
+            pcall(vim.lsp.buf_attach_client, bufnr, client_id)
+        else
+            M.ensure_lsp_for_buffer(server_name, bufnr)
+        end
+    end
+    return true
+end
+
+-- Attempts to start a server manually, finding a compatible buffer to attach to.
+M.start_language_server = function(server_name, force)
+    if _G.lsp_installation_in_progress then return nil end
+    if not force and M.is_server_disabled_globally(server_name) then return nil end
+
+    -- Helper to find a buffer that needs this server
+    local function find_compatible_buf()
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+            if is_real_file_buffer(buf) then
+                local buf_ft = vim.bo[buf].filetype
+                if buf_ft ~= "" and M.is_lsp_compatible_with_ft(server_name, buf_ft) then
+                    return buf, buf_ft
+                end
+            end
+        end
+        return nil, nil
+    end
+
+    local bufnr = vim.api.nvim_get_current_buf()
+    local ft = vim.bo[bufnr].filetype
+    -- If current buffer isn't compatible, look for another one
+    if not is_real_file_buffer(bufnr) or not M.is_lsp_compatible_with_ft(server_name, ft) then
+        bufnr, ft = find_compatible_buf()
+        if not bufnr then
+            if not force then return nil end
+            bufnr = nil -- Start without buffer if forced
+        end
+    end
+
+    if not bufnr then return nil end
+    local client_id = M.ensure_lsp_for_buffer(server_name, bufnr)
+    
+    -- If forced start, attach to all other compatible buffers
+    if force and client_id then
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+            if buf ~= bufnr and is_real_file_buffer(buf) then
+                local buf_ft = vim.bo[buf].filetype
+                if buf_ft ~= "" and M.is_lsp_compatible_with_ft(server_name, buf_ft) then
+                    if not M.is_server_disabled_for_buffer(server_name, buf) then
+                        vim.lsp.buf_attach_client(buf, client_id)
+                    end
+                end
+            end
+        end
+    end
+    return client_id
+end
+
+-- Garbage Collection: Stops LSP servers running in directories that are 
+-- no longer the current working directory or its children.
+M.stop_servers_for_old_project = function()
+    local current_dir = vim.fn.getcwd()
+    local clients = vim.lsp.get_clients()
+    local stopped_count = 0
+    for _, client in ipairs(clients) do
+        if client.config and client.config.root_dir then
+            local client_root = tostring(client.config.root_dir)
+            if type(client.config.root_dir) ~= "function" and client_root ~= current_dir and not vim.startswith(client_root, current_dir) then
+                local cid = client.id
+                vim.schedule(function()
+                    local c = vim.lsp.get_client_by_id(cid)
+                    if c then pcall(function() c:stop() end) end
+                end)
+                stopped_count = stopped_count + 1
+            end
+        end
+    end
+    if stopped_count > 0 then
+        vim.schedule(function()
+            vim.notify(string.format("Stopped %d LSP servers from other projects.", stopped_count), vim.log.levels.INFO)
+        end)
+    end
+    return stopped_count
+end
+
+-- =============================================================================
+-- EFM (General Language Server) Setup
+-- =============================================================================
+
+local efm_restart_timer = nil
+local efm_setup_in_progress = false
+
+-- Configures EFM by aggregating tool configurations for filetypes.
+-- Includes a debounce mechanism to prevent rapid restarts.
+M.setup_efm = function(filetypes, tools_config)
+    if efm_setup_in_progress then
+        vim.schedule(function()
+            vim.defer_fn(function() M.setup_efm(filetypes, tools_config) end, 100)
+        end)
+        return
+    end
+    efm_setup_in_progress = true
+    _G.efm_configs = _G.efm_configs or {}
+    
+    -- Register tools into global config
+    for _, ft in ipairs(filetypes) do
+        _G.efm_configs[ft] = _G.efm_configs[ft] or {}
+        local existing_tools = {}
+        for _, tool in ipairs(_G.efm_configs[ft]) do
+            if tool.server_name then existing_tools[tool.server_name] = true end
+        end
+        for _, tool in ipairs(tools_config) do
+            if tool.server_name and not existing_tools[tool.server_name] then
+                table.insert(_G.efm_configs[ft], tool)
+                existing_tools[tool.server_name] = true
+            end
+        end
+    end
+
+    -- Debounced Restart Logic
+    vim.schedule(function()
+        if efm_restart_timer then efm_restart_timer:stop() end
+        efm_restart_timer = vim.defer_fn(function()
+            local efm_running = false
+            for _, client in ipairs(vim.lsp.get_clients()) do
+                if client.name == "efm" then
+                    efm_running = true
+                    pcall(function() client:stop() end)
+                    break
+                end
+            end
+            vim.defer_fn(function()
+                M.start_language_server("efm", true)
+                efm_setup_in_progress = false
+            end, efm_running and 200 or 0)
+        end, 100) -- 100ms delay
+    end)
+
+    if not vim.defer_fn then efm_setup_in_progress = false end
+end
+
+-- Called when tools finish installing via Mason.
+-- Refreshes running servers to pick up newly installed binaries.
+M.set_installation_status = function(status)
+    local previous_status = _G.lsp_installation_in_progress
+    _G.lsp_installation_in_progress = status
+    if status == false and previous_status == true then
+        vim.defer_fn(function()
+            -- Find newly executable servers
+            local installed_servers = {}
+            for server_name, _ in pairs(_G.file_types or {}) do
+                if vim.fn.executable(server_name) == 1 or (server_name == "efm" and vim.fn.executable("efm-langserver") == 1) then
+                    table.insert(installed_servers, server_name)
+                end
+            end
+            -- Restart them
+            for _, server_name in ipairs(installed_servers) do
+                vim.schedule(function() M.start_language_server(server_name, true) end)
+            end
+            -- Ensure buffer attachment
+            vim.defer_fn(function()
+                for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+                    if is_real_file_buffer(bufnr) then
+                        local ft = vim.bo[bufnr].filetype
+                        if ft and ft ~= "" then
+                            local servers = M.get_compatible_lsp_for_ft(ft)
+                            for _, server_name in ipairs(servers) do
+                                if not M.is_server_disabled_globally(server_name) then
+                                    vim.schedule(function() M.ensure_lsp_for_buffer(server_name, bufnr) end)
+                                end
+                            end
+                        end
+                    end
+                end
+            end, 500)
+        end, 1000)
+    end
+end
+
+return M

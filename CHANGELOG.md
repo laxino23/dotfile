@@ -1,5 +1,9 @@
 ## [unreleased]
 
+### 🚀 Features
+
+- *(change the nvim)* Nvim to new architecture
+
 ### 🐛 Bug Fixes
 
 - Ignore nv12 file

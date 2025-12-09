@@ -1,0 +1,305 @@
+local icons = require("config.ui.icons")
+
+return {
+    neogit = {
+        cmd = { "Neogit" },
+        keys = {
+            { "<Leader>gn", "<Cmd>Neogit<CR>", desc = "Neogit" },
+        },
+        opts = {
+            disable_signs = false,
+            disable_context_highlighting = false,
+            disable_commit_confirmation = false,
+            integrations = {
+                diffview = true,
+            },
+        },
+    },
+
+    mini_diff = {
+        opts = function()
+            vim.schedule(function()
+                vim.keymap.del("n", "gh", {})
+            end)
+            local keys = {
+                goto_first = "<Leader>{",
+                goto_prev = "<Leader>[",
+                goto_next = "<Leader>]",
+                goto_last = "<Leader>}",
+                toggle_overlay = "<Leader>gh",
+            }
+            local base_opts = { noremap = true, silent = true }
+            local function safe_minidiff_call(fn, ...)
+                local ok, mini = pcall(require, "mini.diff")
+                if ok and mini and type(mini[fn]) == "function" then
+                    return pcall(mini[fn], ...)
+                end
+                ---@diagnostic disable-next-line: undefined-field
+                if type(_G.MiniDiff) == "table" and type(_G.MiniDiff[fn]) == "function" then
+                    return pcall(_G.MiniDiff[fn], ...)
+                end
+                return nil, ("mini.diff.%s not available"):format(fn)
+            end
+            vim.keymap.set({ "n", "x" }, keys.goto_first, function()
+                safe_minidiff_call("goto_hunk", "first")
+            end, vim.tbl_extend("force", base_opts, { desc = "MiniDiff: goto first hunk" }))
+            vim.keymap.set({ "n", "x" }, keys.goto_prev, function()
+                safe_minidiff_call("goto_hunk", "prev")
+            end, vim.tbl_extend("force", base_opts, { desc = "MiniDiff: goto previous hunk" }))
+            vim.keymap.set({ "n", "x" }, keys.goto_next, function()
+                safe_minidiff_call("goto_hunk", "next")
+            end, vim.tbl_extend("force", base_opts, { desc = "MiniDiff: goto next hunk" }))
+            vim.keymap.set({ "n", "x" }, keys.goto_last, function()
+                safe_minidiff_call("goto_hunk", "last")
+            end, vim.tbl_extend("force", base_opts, { desc = "MiniDiff: goto last hunk" }))
+            vim.keymap.set("n", keys.toggle_overlay, function()
+                safe_minidiff_call("toggle_overlay")
+            end, vim.tbl_extend("force", base_opts, { desc = "MiniDiff: toggle overlay" }))
+            return {
+                view = {
+                    style = "sign",
+                    signs = {
+                        add = " " .. icons.common.vline,
+                        change = " " .. icons.common.vline,
+                        delete = " " .. icons.common.vline,
+                    },
+                    priority = 199,
+                },
+                mappings = {
+                    apply = nil,
+                    reset = nil,
+                    textobject = nil,
+                    goto_first = nil,
+                    goto_prev = nil,
+                    goto_next = nil,
+                    goto_last = nil,
+                },
+            }
+        end,
+    },
+
+    vgit = {
+        opts = {
+            settings = {
+                hls = {
+                    GitCount = "Keyword",
+                    GitSymbol = "CursorLineNr",
+                    GitTitle = "Directory",
+                    GitSelected = "QuickfixLine",
+                    GitBackground = "Normal",
+                    GitAppBar = "StatusLine",
+                    GitHeader = "NormalFloat",
+                    GitFooter = "NormalFloat",
+                    GitBorder = "LineNr",
+                    GitLineNr = "LineNr",
+                    GitComment = "Comment",
+                    GitSignsAdd = { gui = nil, fg = nil, bg = nil, sp = nil, override = false },
+                    GitSignsChange = { gui = nil, fg = nil, bg = nil, sp = nil, override = false },
+                    GitSignsDelete = { gui = nil, fg = nil, bg = nil, sp = nil, override = false },
+                    GitSignsAddLn = "DiffAdd",
+                    GitSignsDeleteLn = "DiffDelete",
+                    GitWordAdd = { gui = nil, fg = nil, bg = nil, sp = nil, override = false },
+                    GitWordDelete = { gui = nil, fg = nil, bg = nil, sp = nil, override = false },
+                    GitConflictCurrentMark = "DiffAdd",
+                    GitConflictAncestorMark = "Visual",
+                    GitConflictIncomingMark = "DiffChange",
+                    GitConflictCurrent = "DiffAdd",
+                    GitConflictAncestor = "Visual",
+                    GitConflictMiddle = "Visual",
+                    GitConflictIncoming = "DiffChange",
+                },
+                live_gutter = {
+                    enabled = true,
+                    edge_navigation = true,
+                },
+                live_blame = {
+                    enabled = false,
+                    format = function(blame, git_config)
+                        local config_author = git_config["user.name"]
+                        local author = blame.author
+                        if config_author == author then
+                            author = "You"
+                        end
+                        local time = os.difftime(os.time(), blame.author_time) / (60 * 60 * 24 * 30 * 12)
+                        local time_divisions = {
+                            { 1, "years" }, { 12, "months" }, { 30, "days" },
+                            { 24, "hours" }, { 60, "minutes" }, { 60, "seconds" },
+                        }
+                        local counter = 1
+                        local time_division = time_divisions[counter]
+                        local time_boundary = time_division[1]
+                        local time_postfix = time_division[2]
+                        while time < 1 and counter ~= #time_divisions do
+                            time_division = time_divisions[counter]
+                            time_boundary = time_division[1]
+                            time_postfix = time_division[2]
+                            time = time * time_boundary
+                            counter = counter + 1
+                        end
+                        local commit_message = blame.commit_message
+                        if not blame.committed then
+                            author = "You"
+                            commit_message = "Uncommitted changes"
+                            return string.format(" %s • %s", author, commit_message)
+                        end
+                        local max_commit_message_length = 255
+                        if #commit_message > max_commit_message_length then
+                            commit_message = commit_message:sub(1, max_commit_message_length) .. "..."
+                        end
+                        return string.format(
+                            " %s, %s • %s",
+                            author,
+                            string.format(
+                                "%s %s ago",
+                                time >= 0 and math.floor(time + 0.5) or math.ceil(time - 0.5),
+                                time_postfix
+                            ),
+                            commit_message
+                        )
+                    end,
+                },
+                signs = {
+                    enabled = false,
+                    priority = 10,
+                    definitions = {
+                        GitSignsAdd = { texthl = "GitSignsAdd", text = " ▌" },
+                        GitSignsDelete = { texthl = "GitSignsDelete", text = " ▌" },
+                        GitSignsChange = { texthl = "GitSignsChange", text = " ▌" },
+                    },
+                },
+            },
+        },
+
+        config = function(_, opts)
+            local vgit_status_ok, vgit = pcall(require, "vgit")
+            if not vgit_status_ok then return end
+
+            vgit.setup(opts)
+
+            local map = vim.keymap.set
+            local key_opts = { noremap = true, silent = true }
+
+            -- HUNK
+            map("n", "<Leader>g]", vgit.hunk_down, vim.tbl_extend("force", key_opts, { desc = "Git hunk next" }))
+            map("n", "<Leader>g[", vgit.hunk_up, vim.tbl_extend("force", key_opts, { desc = "Git hunk prev" }))
+
+            -- BUFFER
+            map("n", "<Leader>gb", function() end, vim.tbl_extend("force", key_opts, { desc = "VGit Buffer" }))
+            map("n", "<Leader>gbhp", vgit.buffer_hunk_preview, vim.tbl_extend("force", key_opts, { desc = "VGit Buffer Hunk Preview" }))
+            map("n", "<Leader>gbhs", vgit.buffer_hunk_stage, vim.tbl_extend("force", key_opts, { desc = "VGit Buffer Hunk Stage" }))
+            map("n", "<Leader>gbhr", vgit.buffer_hunk_reset, vim.tbl_extend("force", key_opts, { desc = "VGit Buffer Hunk Reset" }))
+
+            -- HISTORY & DIFF
+            map("n", "<Leader>gbHp", vgit.buffer_history_preview, vim.tbl_extend("force", key_opts, { desc = "VGit Buffer History Preview" }))
+            map("n", "<Leader>gbdp", vgit.buffer_diff_preview, vim.tbl_extend("force", key_opts, { desc = "VGit Buffer Diff Preview" }))
+            map("n", "<Leader>gbbp", vgit.buffer_blame_preview, vim.tbl_extend("force", key_opts, { desc = "VGit Buffer Blame Preview" }))
+
+            -- CONFLICT
+            map("n", "<Leader>gbcb", vgit.buffer_conflict_accept_both, vim.tbl_extend("force", key_opts, { desc = "VGit Accept Both" }))
+            map("n", "<Leader>gbcc", vgit.buffer_conflict_accept_current, vim.tbl_extend("force", key_opts, { desc = "VGit Accept Current" }))
+            map("n", "<Leader>gbci", vgit.buffer_conflict_accept_incoming, vim.tbl_extend("force", key_opts, { desc = "VGit Accept Incoming" }))
+
+            -- STAGE/RESET
+            map("n", "<Leader>gbs", vgit.buffer_stage, vim.tbl_extend("force", key_opts, { desc = "VGit Buffer Stage" }))
+            map("n", "<Leader>gbu", vgit.buffer_unstage, vim.tbl_extend("force", key_opts, { desc = "VGit Buffer Unstage" }))
+            map("n", "<Leader>gbr", vgit.buffer_reset, vim.tbl_extend("force", key_opts, { desc = "VGit Buffer Reset" }))
+
+            -- PROJECT
+            map("n", "<Leader>gpdp", vgit.project_diff_preview, vim.tbl_extend("force", key_opts, { desc = "VGit Project Diff Preview" }))
+            map("n", "<Leader>gpcp", vgit.project_commit_preview, vim.tbl_extend("force", key_opts, { desc = "VGit Project Commit Preview" }))
+            map("n", "<Leader>gpsp", vgit.project_stash_preview, vim.tbl_extend("force", key_opts, { desc = "VGit Project Stash Preview" }))
+
+            -- TOGGLE
+            map("n", "<Leader>gtdp", vgit.toggle_diff_preference, vim.tbl_extend("force", key_opts, { desc = "VGit Toggle Diff Pref" }))
+            map("n", "<Leader>gtlg", vgit.toggle_live_gutter, vim.tbl_extend("force", key_opts, { desc = "VGit Toggle Live Gutter" }))
+            map("n", "<Leader>gtlb", vgit.toggle_live_blame, vim.tbl_extend("force", key_opts, { desc = "VGit Toggle Live Blame" }))
+            map("n", "<Leader>gtt", vgit.toggle_tracing, vim.tbl_extend("force", key_opts, { desc = "VGit Toggle Tracing" }))
+        end,
+    },
+
+    diffview_nvim = {
+        cmd = {
+            "DiffviewFileHistory",
+            "DiffviewOpen",
+            "DiffviewClose",
+            "DiffviewFocusFiles",
+            "DiffviewToggleFiles",
+            "DiffviewLog",
+            "DiffviewRefresh",
+        },
+        keys = {
+            {
+                "<Leader>go",
+                "<cmd>DiffviewFileHistory<cr>",
+                mode = "n",
+                desc = "Git diffview file history",
+            },
+            {
+                "<Leader>gO",
+                "<cmd>DiffviewOpen<cr>",
+                mode = "n",
+                desc = "Git diffview open",
+            },
+            {
+                "<C-q>",
+                function()
+                    vim.cmd("DiffviewClose")
+                    vim.cmd("CloseFloatWindows")
+                end,
+                mode = "n",
+                desc = "Git diffview close",
+            },
+        },
+    },
+--
+    time_machine_nvim = {
+        cmd = {
+            "TimeMachineToggle",
+            "TimeMachinePurgeBuffer",
+            "TimeMachinePurgeAll",
+            "TimeMachineLogShow",
+            "TimeMachineLogClear",
+        },
+        keys = {
+            {
+                "<leader>u",
+                "",
+                desc = "Time Machine",
+            },
+            {
+                "<leader>ut",
+                "<cmd>TimeMachineToggle<cr>",
+                desc = "[Time Machine] Toggle Tree",
+            },
+            {
+                "<leader>up",
+                "<cmd>TimeMachinePurgeCurrent<cr>",
+                desc = "[Time Machine] Purge current",
+            },
+            {
+                "<leader>uP",
+                "<cmd>TimeMachinePurgeAll<cr>",
+                desc = "[Time Machine] Purge all",
+            },
+            {
+                "<leader>ul",
+                "<cmd>TimeMachineLogShow<cr>",
+                desc = "[Time Machine] Show log",
+            },
+        },
+        opts = {
+            diff_tool = "delta",
+            external_diff_args = {
+                delta = {
+                    "--side-by-side",
+                    "--line-numbers",
+                    "--navigate",
+                    "--file-style=omit",
+                    "--hunk-header-style=omit",
+                },
+            },
+        },
+    },
+}
+
+-- vim: foldmethod=indent foldlevel=1

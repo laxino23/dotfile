@@ -2,17 +2,17 @@ theme = Synthwave
 shell-integration = zsh
 shell-integration-features = no-cursor 
 
-font-family = "Monolisa"
-font-family-bold = "Monolisa"
-font-family-italic = "Monolisa"
-font-family-bold-italic = "Monolisa"
+font-family = "CaskaydiaCove Nerd Font"
+font-family-bold = "CaskaydiaCove Nerd Font"
+font-family-italic = "CaskaydiaCove Nerd Font"
+font-family-bold-italic = "CaskaydiaCove Nerd Font"
 
 font-style = Regular
 font-style-bold = Bold
 font-style-italic = Regular Italic
 font-style-bold-italic = Bold Italic
 
-font-size = 14
+font-size = 12
 
 font-feature = calt
 font-feature = liga
